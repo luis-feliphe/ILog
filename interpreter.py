@@ -17,6 +17,13 @@ class leitorComandos:
 			arquivo.close()
 			return lista
 		return []
+class Notify:
+	def __init__(self, sensor, hora, variacao, pessoas):
+		self.sensor = sensor
+		self.hora = hora
+		self.variacao = variacao
+		self.pessoas = pessoas
+
 
 class sensor:
 	def __init__(self,name ):
@@ -29,27 +36,25 @@ class sensor:
 		return self.name
 	
 	def receberComando(self, tempo, pessoas):
+		alerta = None
 		#verificar Aumento
-		print "recebendo comando "
-		variacao = len(self.pessoas) - len (pessoas)
-		if (variacao > 0 ): print "eh maior !!!!!"
+		variacao =  len (pessoas) - len(self.pessoas)
 		self.mapa[tempo] = pessoas
-		return variacao
+		tempoNotify = 0
+		if (len (self.notifys) != 0):
+			tempoNotify = self.notifys[0].hora
+			alerta = self.notifys.pop(0)
 
-	#parametros (qual sensor? ,momento , qtd de variacao, id de cada pessoa (provavelmente lista)
-	# vizinhos guardam o notify até receberem um alert
-	def notify (self, sensor, momento, variacao, pessoas):
-#		self.notify.append()
-		print ("chgou um notify porr aqui no sensor  ",self.name, " do sensor ", sensor , " time ", momento)
-		#avisa todos os vizinhos se aumentar o numero de pessoas em sua area de cobertura
-		#return False
+		return variacao, alerta, tempoNotify
 
 
-	#detectar um aumento de pessoas em sua regio e conter um notify dos vizinhos
+	def notify (self, dados):
+		self.notifys.append(dados)
 
 	#mensagem enviada a um unico sensor na direção oposta (se recebeu notify do sul manda alert pra norte)
 	#ao receber alert continuar mandadndo para o sentido" até o fim "
-	def alert(self):
+	def alert(self, qtdPessoas, tempoDeAlcance):
+		print (self.name, "receive a alert", qtdPessoas, " in ", tempoDeAlcance, "sec")
 		return False
 
 
@@ -60,6 +65,22 @@ class sensor:
 
 
 	
+class sensorNulo(sensor): #quando não existe sensor em determinada posicao
+	def __init__(self,name ):
+		self.name= str(name)
+	def __str__(self):
+		return self.name
+	def receberComando(self, tempo, pessoas):
+		return 0
+	def notify (self, sensor):
+		return False
+	def alert(self, x , y):
+		return False
+	def alarm(self):
+		return False
+
+
+
 
 class rssf:
 	def __init__(self, numeroLinhas, tamLinhas ):
@@ -73,7 +94,7 @@ class rssf:
 					self.lista[linha].append(sensor(count))
 					count+= 1
 				else:
-					self.lista[linha].append(sensor("x"))
+					self.lista[linha].append(sensorNulo("x"))
 	
 	def verModelo(self):	
 		retorno = "modelo:\n\n"
@@ -112,26 +133,80 @@ class Gerente:
 		for comando in self.comandos:
 			sensor , tempo, pessoas = self.interpretarComando(comando)
 			linha, elemento = self.redeSensores.buscarSensor(sensor)
-			variacao = self.redeSensores.getLista()[linha][elemento].receberComando(tempo, pessoas)
+			variacao, alerta, tempoNotify = self.redeSensores.getLista()[linha][elemento].receberComando(tempo, pessoas)
 			#se aconteceu variacao, mandar notifys (todas direcoes)
-			if variacao < 0: 
-					if linha > 0:
-						self.redeSensores.getLista()[linha-1][elemento].notify(sensor, tempo , variacao, pessoas)
-						if elemento < len (self.redeSensores.getLista()[linha]):
-							self.redeSensores.getLista()[linha-1][elemento+1].notify(sensor, tempo , variacao, pessoas)
-						if elemento > 0:
-							self.redeSensores.getLista()[linha-1][elemento-1].notify(sensor, tempo , variacao, pessoas)
-					if linha < len (self.redeSensores.getLista()):
-						self.redeSensores.getLista()[linha+1][elemento].notify(sensor, tempo , variacao, pessoas)
-						if elemento > 0:
-							self.redeSensores.getLista()[linha+1][elemento-1].notify(sensor, tempo , variacao, pessoas)
-						if elemento < len (self.redeSensores.getLista()[linha]):
-							self.redeSensores.getLista()[linha+1][elemento+1].notify(sensor, tempo , variacao, pessoas)
+			if variacao > 0: 
+				dados = Notify (sensor, tempo, variacao, pessoas)	
+				if linha > 0:
+					self.redeSensores.getLista()[linha-1][elemento].notify(dados)
+					if elemento < len (self.redeSensores.getLista()[linha]):
+						self.redeSensores.getLista()[linha-1][elemento+1].notify(dados)
 					if elemento > 0:
-						self.redeSensores.getLista()[linha][elemento-1].notify(sensor, tempo , variacao, pessoas)
-					if elemento < len(self.redeSensores.getLista()[linha]):
-						self.redeSensores.getLista()[linha][elemento+1].notify(sensor, tempo , variacao, pessoas)
-
+						self.redeSensores.getLista()[linha-1][elemento-1].notify(dados)
+				if linha < len (self.redeSensores.getLista()):
+					self.redeSensores.getLista()[linha+1][elemento].notify(dados)
+					if elemento > 0:
+						self.redeSensores.getLista()[linha+1][elemento-1].notify(dados)
+					if elemento < len (self.redeSensores.getLista()[linha]):
+						self.redeSensores.getLista()[linha+1][elemento+1].notify(dados)
+				if elemento > 0:
+					self.redeSensores.getLista()[linha][elemento-1].notify(dados)
+				if elemento < len(self.redeSensores.getLista()[linha]):
+					self.redeSensores.getLista()[linha][elemento+1].notify(dados)
+			#TODO dar prioridade ao alert inves do notify
+			if alerta != None:
+				linhaAlerta, elementoAlerta = self.redeSensores.buscarSensor(alerta.sensor)
+				cont=1
+				cont2=-1 
+				if linhaAlerta < linha :
+					if elementoAlerta == elemento:
+						#TODO envia alerta para elemento (linha +1 , elemento)
+						while (linha + cont < len(self.redeSensores.getLista())):
+							self.redeSensores.getLista()[linha+cont][elemento].alert(variacao,tempo-tempoNotify)
+							cont+= 1
+					if (elementoAlerta < elemento):
+						#TODO envia alerta para elemento (linha +1 , elemento + 1)
+						while (linha + cont < len(self.redeSensores.getLista()) and elemento+cont <= self.redeSensores.getLista()[linha]):
+							self.redeSensores.getLista()[linha+cont][elemento+cont].alert(variacao,tempo-tempoNotify)
+							cont+= 1
+					if elementoAlerta > elemento :
+						#TODO envia alerta para elemento (linha +1 , elemento - 1)
+						while (linha + cont <= len(self.redeSensores.getLista()) and elemento+cont2 >= 0):
+							self.redeSensores.getLista()[linha+cont][elemento+cont2].alert(variacao,tempo-tempoNotify)
+							cont+= 1
+							cont2-= 1
+				if linhaAlerta > linha :
+					if elementoAlerta == elemento:
+						#TODO envia alerta para elemento (linha -1 , elemento)
+						while (linha + cont >= 0):
+							self.redeSensores.getLista()[linha+ cont2][elemento].alert(variacao,tempo-tempoNotify)
+							cont2 -= 1
+					if elementoAlerta < elemento :
+						#TODO envia alerta para elemento (linha -1 , elemento + 1)
+						while (linha + cont2 >= 0 and elemento+cont <= self.redeSensores.getLista()[linha]):
+							self.redeSensores.getLista()[linha+ cont2][elemento+cont].alert(variacao,tempo-tempoNotify)
+							cont+= 1
+							cont2 -= 1
+					if elementoAlerta > elemento :
+						#TODO envia alerta para elemento (linha -1 , elemento - 1)
+						while (linha + cont2 >= 0 and elemento+cont2 >= 0):
+							self.redeSensores.getLista()[linha+ cont2][elemento+ cont2].alert(variacao,tempo-tempoNotify)
+							cont2 -= 1
+				if linhaAlerta == linha :
+					if elementoAlerta < elemento:
+						#TODO envia alerta para elemento (linha , elemento + 1)
+						while (linha + cont <= self.redeSensores.getLista()[linha]):
+							self.redeSensores.getLista()[linha][elemento+cont].alert(variacao,tempo-tempoNotify)
+							cont+= 1
+					if elementoAlerta > elemento: 
+						#TODO envia alerta para elemento (linha , elemento - 1)
+						while (elemento + cont2 <= 0):
+							self.redeSensores.getLista()[linha][elemento+cont2].alert(variacao,tempo-tempoNotify)
+							cont2 -= 1
+					
+					
+				
+				
 
 	def getListaNumeros(self):
 		lista = []
