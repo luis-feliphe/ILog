@@ -60,13 +60,13 @@ class sensor:
 	#mensagem enviada a um unico sensor na direção oposta (se recebeu notify do sul manda alert pra norte)
 	#ao receber alert continuar mandadndo para o sentido" até o fim "
 	def alert(self,dados):
-		print (self.name, "receive a alert",dados.qtd, " in ", dados.tempo, "sec")
+		print (self.name, "Recebeu um alerta, ",dados.qtd, " pessoas em ", dados.tempo, "segundos")
 		soma = dados.qtd
 		for i in self.alerts:
 			if i.tempo == dados.tempo: 
 				soma+= i.qtd
 		if soma >= LIMITE:
-			print ("ALARM!!!: Sensor ", self.name)
+			print ("ALARME!!!: Sensor ", self.name)
 			return True
 		return False
 
